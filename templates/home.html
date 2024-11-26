@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monitoreo Uso de Memoria Protocolo SNMP</title>
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="container-fluid">
+        <h1 class="my-4">Monitoreo Uso de Memoria Protocolo SNMP</h1>
+        <div class="row">
+            <div class="col-12 col-md-6">
+                <div class="card mb-4">
+                    <div class="card-header">
+                        Uso de Memoria PC1 (Local)
+                    </div>
+                    <div class="card-body">
+                        <div id="memoriaInfoLocal" class="mb-3">
+                            <strong>Memoria Total: </strong><span id="memoriaTotalLocal">12188</span> MB |
+                            <strong>Memoria Usada: </strong><span id="memoriaUsadaLocal">Cargando...</span> MB |
+                            <strong>Memoria Libre: </strong><span id="memoriaLibreLocal">Cargando...</span> MB
+                        </div>
+                        <canvas id="memoriaChartLocal" width="400" height="200"></canvas>
+                    </div>
+                </div>
+            </div>
+            <div class="col-12 col-md-6">
+                <div class="card mb-4">
+                    <div class="card-header">
+                        Uso de Memoria PC2 (192.168.2.15)
+                    </div>
+                    <div class="card-body">
+                        <div id="memoriaInfoRemote" class="mb-3">
+                            <strong>Memoria Total: </strong><span id="memoriaTotalRemote">8192</span> MB |
+                            <strong>Memoria Usada: </strong><span id="memoriaUsadaRemote">Cargando...</span> MB |
+                            <strong>Memoria Libre: </strong><span id="memoriaLibreRemote">Cargando...</span> MB
+                        </div>
+                        <canvas id="memoriaChartRemote" width="400" height="200"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const maxDataPoints = 100;
+
+            // Gráfico de Memoria para PC1 (Local)
+            const memoriaCtxLocal = document.getElementById('memoriaChartLocal').getContext('2d');
+            const memoriaChartLocal = new Chart(memoriaCtxLocal, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [
+                        { label: 'Memoria Usada (MB)', data: [], borderColor: '#e74c3c', backgroundColor: '#f1948a', fill: true },
+                        { label: 'Memoria Libre (MB)', data: [], borderColor: '#2ecc71', backgroundColor: '#a9dfbf', fill: true }
+                    ]
+                },
+                options: {
+                    scales: {
+                        x: { title: { display: true, text: 'Tiempo' } },
+                        y: { title: { display: true, text: 'Valor (MB)' }, beginAtZero: true }
+                    }
+                }
+            });
+
+            // Gráfico de Memoria para PC2 (Remoto)
+            const memoriaCtxRemote = document.getElementById('memoriaChartRemote').getContext('2d');
+            const memoriaChartRemote = new Chart(memoriaCtxRemote, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [
+                        { label: 'Memoria Usada (MB)', data: [], borderColor: '#3498db', backgroundColor: '#aed6f1', fill: true },
+                        { label: 'Memoria Libre (MB)', data: [], borderColor: '#f1c40f', backgroundColor: '#f9e79f', fill: true }
+                    ]
+                },
+                options: {
+                    scales: {
+                        x: { title: { display: true, text: 'Tiempo' } },
+                        y: { title: { display: true, text: 'Valor (MB)' }, beginAtZero: true }
+                    }
+                }
+            });
+
+            function convertToLocalTime(timestamp) {
+                const date = new Date(timestamp + 'Z');
+                return date.toLocaleString();
+            }
+
+            function updateCharts(host, chart, url, updateInfoCallback) {
+                fetch(url)
+                    .then(response => response.json())
+                    .then(data => {
+                        const recentData = data.slice(-maxDataPoints);
+                        chart.data.labels = recentData.map(entry => convertToLocalTime(entry.timestamp));
+                        chart.data.datasets[0].data = recentData.map(entry => entry.usada);
+                        chart.data.datasets[1].data = recentData.map(entry => entry.libre);
+                        chart.update();
+
+                        // Actualizar los valores de memoria
+                        const usedMem = recentData[recentData.length - 1].usada;
+                        const freeMem = recentData[recentData.length - 1].libre;
+                        updateInfoCallback(usedMem, freeMem);
+                    })
+                    .catch(error => console.error(`Error al cargar el historial de memoria para ${host}:`, error));
+            }
+
+            // Actualizar la información de Memoria para PC1 (Local)
+            function updateMemoryInfoLocal(used, free) {
+                document.getElementById('memoriaUsadaLocal').textContent = used;
+                document.getElementById('memoriaLibreLocal').textContent = free;
+            }
+
+            // Actualizar la información de Memoria para PC2 (Remoto)
+            function updateMemoryInfoRemote(used, free) {
+                document.getElementById('memoriaUsadaRemote').textContent = used;
+                document.getElementById('memoriaLibreRemote').textContent = free;
+            }
+
+            // Cargar datos para los gráficos
+            updateCharts('localhost', memoriaChartLocal, '/memoria-historico/localhost', updateMemoryInfoLocal);
+            updateCharts('192.168.2.15', memoriaChartRemote, '/memoria-historico/192.168.2.15', updateMemoryInfoRemote);
+
+            // Actualizar cada 5 segundos
+            setInterval(() => {
+                updateCharts('localhost', memoriaChartLocal, '/memoria-historico/localhost', updateMemoryInfoLocal);
+                updateCharts('192.168.2.15', memoriaChartRemote, '/memoria-historico/192.168.2.15', updateMemoryInfoRemote);
+            }, 5000);
+        });
+    </script>
+</body>
+</html>
